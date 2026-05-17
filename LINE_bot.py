@@ -89,19 +89,16 @@ def retry_on_error(func, max_retries=3, delay=2):
 
 def push_daily_projects(group_id, projects):
     """
-    推送每日專案更新到指定群組
+    推送每日專案更新到指定群組（單一通知）
     """
     try:
-        # 構建推送訊息
-        messages = []
+        # 構建單一推送訊息
+        message_text = "📚 Claude Code 專案靈感集 - 每日新增\n"
+        message_text += f"📅 {datetime.now().strftime('%Y/%m/%d')}\n"
+        message_text += f"✨ 今日新增 {len(projects)} 個專案\n"
+        message_text += "=" * 40 + "\n\n"
 
-        # 第一條：標題
-        header = "📚 Claude Code 專案靈感集 - 每日新增\n"
-        header += f"📅 {datetime.now().strftime('%Y/%m/%d')}\n"
-        header += f"✨ 今日新增 {len(projects)} 個專案\n"
-        messages.append(TextSendMessage(text=header))
-
-        # 逐個專案推送
+        # 逐個專案加入訊息
         for i, project in enumerate(projects, 1):
             title = project.get("title", "未命名")
             level = project.get("level", "")
@@ -116,20 +113,23 @@ def push_daily_projects(group_id, projects):
             }.get(level, "⭕")
 
             # 構建訊息
-            msg = f"{i}. {level_emoji} {title}\n"
-            msg += f"   難度：{level}\n"
-            msg += f"   分類：{category}\n"
+            message_text += f"{i}. {level_emoji} {title}\n"
+            message_text += f"   難度：{level} | 分類：{category}\n"
             if description:
-                msg += f"   描述：{description}\n"
+                message_text += f"   {description}\n"
+            message_text += "\n"
 
-            messages.append(TextSendMessage(text=msg))
+        # 加入網頁連結
+        message_text += "=" * 40 + "\n"
+        message_text += "👉 查看完整列表：\n"
+        message_text += "https://kaojia.github.io/claude-code-inspirations/\n\n"
+        message_text += "💡 點擊左側欄「分類」可篩選專案\n"
+        message_text += "🔍 使用搜尋功能尋找感興趣的專案"
 
-        # 推送所有訊息
-        for msg in messages:
-            line_bot_api.push_message(group_id, msg)
-            time.sleep(0.5)  # 避免 rate limit
+        # 一次推送整個訊息
+        line_bot_api.push_message(group_id, TextSendMessage(text=message_text))
 
-        print(f"✅ 成功推送 {len(projects)} 個專案到群組 {group_id}")
+        print(f"✅ 成功推送 {len(projects)} 個專案到群組 {group_id}（單一通知）")
         return True
 
     except Exception as e:
@@ -259,7 +259,7 @@ def handle_message(event):
 
         # 一般訊息
         if source_type == "group" and chat_id == TARGET_GROUP_ID:
-            reply_text = "💡 此群組用於接收 Claude Code 每日專案推送"
+            reply_text = "💡 此群組用於接收 Claude Code 每日專案推送\n\n👉 查看網站：https://kaojia.github.io/claude-code-inspirations/"
         else:
             send_loading_animation(chat_id, duration=10)
             reply_text = get_gpt_reply(user_text, chat_id)
