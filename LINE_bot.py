@@ -272,6 +272,12 @@ def handle_image(event):
         result_msg = process_business_card(image_data, chat_id)
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=result_msg))
 
+    # 如果使用者輸入特定指令
+    if user_text == "show-group-id":
+        # 直接回覆這個群組的 ID
+        reply_text = f"📌 此群組的 ID：{chat_id}"
+        line_bot_api.reply_message(event.reply_token, reply_text)
+
 
 # --- 工具函式：搜尋與修改 Google Sheets ---
 
