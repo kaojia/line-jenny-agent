@@ -157,7 +157,7 @@ def get_gpt_reply(user_message, chat_id):
     """ChatGPT 帶上下文回覆"""
     try:
         history = get_chat_history(chat_id)
-        messages = [{"role": "system", "content": "你是一個友善的 AI 助手，請用繁體中文回覆。"}]
+        messages = [{"role": "system", "content": "你是一個友善的 AI 助手。"}]
         messages.extend(history)
         messages.append({"role": "user", "content": user_message})
 
