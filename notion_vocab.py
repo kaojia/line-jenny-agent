@@ -51,29 +51,34 @@ def fetch_all_vocab():
 def extract_vocab_info(page):
     """
     從 Notion page 提取單字資訊
-    請根據你的 Notion 資料庫欄位名稱調整 property name
+    欄位對應：單字、假名、中文意思、例句、例句翻譯
     """
     props = page.get("properties", {})
 
-    def get_title(prop):
-        """取得 title 類型的值"""
-        items = prop.get("title", [])
-        return items[0]["plain_text"] if items else ""
+    def get_text_value(prop):
+        """通用取值：支援 title, rich_text, select, multi_select 等類型"""
+        prop_type = prop.get("type", "")
 
-    def get_rich_text(prop):
-        """取得 rich_text 類型的值"""
-        items = prop.get("rich_text", [])
-        return items[0]["plain_text"] if items else ""
+        if prop_type == "title":
+            items = prop.get("title", [])
+            return "".join([item["plain_text"] for item in items]) if items else ""
 
-    # ============================================================
-    # ⚠️ 請根據你的 Notion 資料庫欄位名稱修改以下 key
-    # 常見欄位名稱範例：
-    #   單字: "単語", "単字", "Word", "Name"
-    #   讀音: "読み", "読み方", "Reading", "ふりがな"
-    #   意思: "意味", "中文", "Meaning", "翻訳"
-    #   例句: "例文", "Sentence", "Example"
-    #   例句翻譯: "例文翻訳", "Translation", "中文翻訳"
-    # ============================================================
+        elif prop_type == "rich_text":
+            items = prop.get("rich_text", [])
+            return "".join([item["plain_text"] for item in items]) if items else ""
+
+        elif prop_type == "select":
+            select = prop.get("select")
+            return select["name"] if select else ""
+
+        elif prop_type == "multi_select":
+            items = prop.get("multi_select", [])
+            return ", ".join([item["name"] for item in items])
+
+        elif prop_type == "number":
+            return str(prop.get("number", ""))
+
+        return ""
 
     vocab = {
         "word": "",       # 日文單字
@@ -83,22 +88,19 @@ def extract_vocab_info(page):
         "sentence_zh": "" # 例句中文翻譯
     }
 
-    # 嘗試常見的欄位名稱
-    for key, candidates in {
-        "word": ["単語", "単字", "Word", "Name", "名前"],
-        "reading": ["読み", "読み方", "Reading", "ふりがな", "かな"],
-        "meaning": ["意味", "中文", "Meaning", "翻訳", "中文意思"],
-        "sentence": ["例文", "Sentence", "Example", "例句"],
-        "sentence_zh": ["例文翻訳", "Translation", "中文翻訳", "例句翻譯", "例句中文"],
-    }.items():
+    # 欄位名稱對應（優先順序：你的 Notion 欄位名在前）
+    field_mapping = {
+        "word": ["單字", "単語", "単字", "Word", "Name"],
+        "reading": ["假名", "読み", "読み方", "Reading", "ふりがな"],
+        "meaning": ["中文意思", "意味", "中文", "Meaning", "翻訳"],
+        "sentence": ["例句", "例文", "Sentence", "Example"],
+        "sentence_zh": ["例句翻譯", "例文翻訳", "Translation", "中文翻訳"],
+    }
+
+    for key, candidates in field_mapping.items():
         for candidate in candidates:
             if candidate in props:
-                prop = props[candidate]
-                prop_type = prop.get("type", "")
-                if prop_type == "title":
-                    vocab[key] = get_title(prop)
-                elif prop_type == "rich_text":
-                    vocab[key] = get_rich_text(prop)
+                vocab[key] = get_text_value(props[candidate])
                 break
 
     return vocab
@@ -177,10 +179,17 @@ def main():
 
     # 2. 提取單字資訊
     all_vocab = []
-    for page in all_pages:
+    for i, page in enumerate(all_pages):
         vocab = extract_vocab_info(page)
         if vocab["word"]:  # 只保留有單字的項目
             all_vocab.append(vocab)
+        elif i < 3:
+            # 印出前幾筆的 properties 名稱幫助除錯
+            props = page.get("properties", {})
+            print(f"⚠️ 第 {i+1} 筆無法取得單字，欄位名稱：{list(props.keys())}")
+            if props:
+                first_key = list(props.keys())[0]
+                print(f"   範例欄位 '{first_key}' 類型：{props[first_key].get('type', 'unknown')}")
 
     print(f"✅ 有效單字：{len(all_vocab)} 個")
 
