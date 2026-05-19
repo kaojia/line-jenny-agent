@@ -219,6 +219,32 @@ def push_daily():
         return {"status": "error", "message": str(e)}, 500
 
 
+@app.route("/push/vocab", methods=['POST'])
+def push_vocab():
+    """
+    接收 GitHub Actions 的 N1 單字推送請求
+    """
+    try:
+        data = request.get_json()
+
+        # 驗證密鑰
+        if data.get("secret") != PUSH_SECRET:
+            return {"status": "error", "message": "Invalid secret"}, 401
+
+        message = data.get("message", "")
+        if not message:
+            return {"status": "error", "message": "No message provided"}, 400
+
+        # 推送到目標群組
+        line_bot_api.push_message(TARGET_GROUP_ID, TextSendMessage(text=message))
+        print(f"✅ 成功推送 N1 單字到群組 {TARGET_GROUP_ID}")
+        return {"status": "success", "message": "Vocab pushed"}, 200
+
+    except Exception as e:
+        print(f"❌ /push/vocab 錯誤：{e}")
+        return {"status": "error", "message": str(e)}, 500
+
+
 @app.route("/debug/group-id", methods=['GET'])
 def debug_group_id():
     """除錯用：顯示當前 TARGET_GROUP_ID"""

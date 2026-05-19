@@ -1,0 +1,54 @@
+name: Daily N1 Vocab Push
+
+on:
+  schedule:
+    # 台灣時間 08:00 = UTC 00:00
+    - cron: '0 0 * * *'
+    # 台灣時間 18:00 = UTC 10:00
+    - cron: '0 10 * * *'
+  workflow_dispatch:  # 允許手動觸發
+    inputs:
+      session:
+        description: '推送時段 (上午/下午)'
+        required: false
+        default: '上午'
+
+jobs:
+  push-vocab:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Determine session
+        id: session
+        run: |
+          # 根據 UTC 時間判斷是上午還是下午推送
+          HOUR=$(date -u +%H)
+          if [ "${{ github.event.inputs.session }}" != "" ]; then
+            echo "session=${{ github.event.inputs.session }}" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" -lt 5 ]; then
+            echo "session=上午" >> $GITHUB_OUTPUT
+          else
+            echo "session=下午" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push N1 vocab to LINE
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          RENDER_DEPLOY_URL: ${{ secrets.RENDER_DEPLOY_URL }}
+          PUSH_SECRET: ${{ secrets.PUSH_SECRET }}
+          VOCAB_SESSION: ${{ steps.session.outputs.session }}
+        run: python notion_vocab.py
