@@ -85,6 +85,47 @@ def retry_on_error(func, max_retries=3, delay=2):
                 raise e
 
 
+# --- 名片寫入 Google Sheet ---
+
+def save_card_to_sheet(card_text):
+    """解析名片辨識結果並寫入 Google Sheet"""
+    # 解析欄位
+    fields = {"姓名": "", "公司": "", "職稱": "", "電話": "", "手機": "", "Email": "", "地址": "", "網站": "", "備註": ""}
+    for line in card_text.split("\n"):
+        line = line.strip()
+        for key in fields:
+            if line.startswith(f"{key}：") or line.startswith(f"{key}:"):
+                fields[key] = line.split("：", 1)[-1].split(":", 1)[-1].strip()
+                break
+
+    # 寫入 Google Sheet
+    def _write():
+        gc = get_gs_client()
+        sh = gc.open_by_key(GOOGLE_SHEET_KEY)
+        # 嘗試開啟「名片」工作表，若不存在則建立
+        try:
+            ws = sh.worksheet("名片")
+        except gspread.exceptions.WorksheetNotFound:
+            ws = sh.add_worksheet(title="名片", rows=1000, cols=10)
+            ws.append_row(["日期", "姓名", "公司", "職稱", "電話", "手機", "Email", "地址", "網站", "備註"])
+
+        row = [
+            datetime.now().strftime("%Y/%m/%d %H:%M"),
+            fields["姓名"],
+            fields["公司"],
+            fields["職稱"],
+            fields["電話"],
+            fields["手機"],
+            fields["Email"],
+            fields["地址"],
+            fields["網站"],
+            fields["備註"]
+        ]
+        ws.append_row(row)
+
+    retry_on_error(_write)
+
+
 # --- 推送功能區 ---
 
 def push_daily_projects(group_id, projects):
@@ -258,14 +299,70 @@ def debug_group_id():
 
 @handler.add(MessageEvent, message=ImageMessage)
 def handle_image(event):
-    """處理圖片訊息"""
+    """處理圖片訊息 — 名片辨識"""
     source_type = event.source.type
     chat_id = getattr(event.source, f"{source_type}_id", "UNKNOWN")
     print(f"📌 目前訊息來源 chat_id: {chat_id}")
 
     if source_type == "group" and chat_id == TARGET_GROUP_ID:
-        send_loading_animation(chat_id, duration=10)
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="收到圖片"))
+        send_loading_animation(chat_id, duration=20)
+
+        try:
+            # 1. 下載圖片
+            message_id = event.message.id
+            image_content = line_bot_api.get_message_content(message_id)
+            image_bytes = b""
+            for chunk in image_content.iter_content():
+                image_bytes += chunk
+            image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
+            # 2. 用 GPT-4o 辨識名片
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是名片辨識助手。請從圖片中擷取名片資訊，"
+                            "以下列格式回覆（若無該欄位請留空）：\n"
+                            "姓名：\n公司：\n職稱：\n電話：\n手機：\nEmail：\n地址：\n網站：\n備註：\n\n"
+                            "如果圖片不是名片，請回覆「這不是名片」。"
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "請辨識這張名片的內容"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_base64}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_completion_tokens=800
+            )
+            result = response.choices[0].message.content.strip()
+
+            # 3. 若辨識成功，寫入 Google Sheet
+            if "這不是名片" not in result:
+                try:
+                    save_card_to_sheet(result)
+                    result += "\n\n✅ 已儲存至 Google Sheet"
+                except Exception as e:
+                    print(f"❌ 寫入 Google Sheet 失敗：{e}")
+                    result += "\n\n⚠️ 儲存失敗，請稍後再試"
+
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=result))
+
+        except Exception as e:
+            print(f"❌ 名片辨識錯誤：{e}")
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="⚠️ 圖片辨識失敗，請稍後再試。")
+            )
 
 
 @handler.add(MessageEvent, message=TextMessage)
