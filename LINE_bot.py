@@ -24,6 +24,7 @@ LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 TARGET_GROUP_ID = os.getenv("TARGET_GROUP_ID", "C25afbbbc3a5a4c6d8d1083c907dea2d7")
+CARD_GROUP_ID = os.getenv("CARD_GROUP_ID", "C25afbbbc3a5a4c6d8d1083c907dea2d7")
 key_json_str = os.getenv("Creds2")
 CREDENTIALS_DICT2 = json.loads(key_json_str) if key_json_str else {}
 GOOGLE_SHEET_KEY = "1P56w56RVhU9Re_Q6hehLbI6eXnOZ_x-VJdLYK1_kWRE"
@@ -304,9 +305,9 @@ def handle_image(event):
     chat_id = getattr(event.source, f"{source_type}_id", "UNKNOWN")
     print(f"📌 目前訊息來源 chat_id: {chat_id}")
 
-    print(f"📌 比對：chat_id={chat_id}, TARGET={TARGET_GROUP_ID}, match={chat_id == TARGET_GROUP_ID}")
+    print(f"📌 比對：chat_id={chat_id}, CARD_GROUP={CARD_GROUP_ID}, match={chat_id == CARD_GROUP_ID}")
 
-    if source_type == "group" and chat_id == TARGET_GROUP_ID:
+    if source_type == "group" and chat_id == CARD_GROUP_ID:
         print("✅ 條件通過，開始辨識名片...")
         send_loading_animation(chat_id, duration=20)
 
@@ -370,7 +371,7 @@ def handle_image(event):
                 TextSendMessage(text="⚠️ 圖片辨識失敗，請稍後再試。")
             )
     else:
-        print(f"⚠️ 條件未通過：source_type={source_type}, chat_id={chat_id}")
+        print(f"⚠️ 條件未通過：source_type={source_type}, chat_id={chat_id}, CARD_GROUP={CARD_GROUP_ID}")
 
 
 @handler.add(MessageEvent, message=TextMessage)
