@@ -304,12 +304,16 @@ def handle_image(event):
     chat_id = getattr(event.source, f"{source_type}_id", "UNKNOWN")
     print(f"📌 目前訊息來源 chat_id: {chat_id}")
 
+    print(f"📌 比對：chat_id={chat_id}, TARGET={TARGET_GROUP_ID}, match={chat_id == TARGET_GROUP_ID}")
+
     if source_type == "group" and chat_id == TARGET_GROUP_ID:
+        print("✅ 條件通過，開始辨識名片...")
         send_loading_animation(chat_id, duration=20)
 
         try:
             # 1. 下載圖片
             message_id = event.message.id
+            print(f"📷 下載圖片 message_id={message_id}")
             image_content = line_bot_api.get_message_content(message_id)
             image_bytes = b""
             for chunk in image_content.iter_content():
@@ -359,10 +363,14 @@ def handle_image(event):
 
         except Exception as e:
             print(f"❌ 名片辨識錯誤：{e}")
+            import traceback
+            traceback.print_exc()
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text="⚠️ 圖片辨識失敗，請稍後再試。")
             )
+    else:
+        print(f"⚠️ 條件未通過：source_type={source_type}, chat_id={chat_id}")
 
 
 @handler.add(MessageEvent, message=TextMessage)
