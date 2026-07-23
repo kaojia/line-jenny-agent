@@ -184,43 +184,40 @@ def push_market_news(group_id, news_items):
     推送市場新聞到指定群組（純文字格式）
     """
     try:
-        priority_icons = {
-            "high": "[!]",
-            "medium": "[*]",
-            "low": "[-]",
+        priority_emoji = {
+            "high": "🔴",
+            "medium": "🟡",
+            "low": "🟢",
         }
 
-        message_text = "--- AU/MENA Market News ---\n"
-        message_text += datetime.now().strftime("%Y/%m/%d") + "\n"
-        message_text += "=" * 30 + "\n\n"
+        message_text = "📰 AU/MENA 市場快報 - 每日精選\n"
+        message_text += f"📅 {datetime.now().strftime('%Y/%m/%d')}\n"
+        message_text += f"✨ 今日精選 {len(news_items)} 則新聞\n"
+        message_text += "=" * 40 + "\n\n"
 
         for i, item in enumerate(news_items[:3], 1):
-            title = item.get("title", "").strip() or "Untitled"
+            title = item.get("title", "").strip() or "未命名"
             summary = item.get("summary", "").strip()
-            category = item.get("category", "").strip()
+            category = item.get("category", "").strip() or "新聞"
             priority = item.get("priority", "low")
             source_url = item.get("source_url", "").strip()
             marketplace = item.get("marketplace", "").strip()
 
-            icon = priority_icons.get(priority, "[-]")
-            tags = []
-            if marketplace:
-                tags.append(marketplace)
-            if category:
-                tags.append(category)
-            tag_str = " | ".join(tags)
+            emoji = priority_emoji.get(priority, "🟢")
+            mp_str = f" | 站點：{marketplace}" if marketplace else ""
 
-            message_text += f"{i}. {icon} {title}\n"
-            if tag_str:
-                message_text += f"   [{tag_str}]\n"
+            message_text += f"{i}. {emoji} {title}\n"
+            message_text += f"   分類：{category}{mp_str}\n"
             if summary:
                 message_text += f"   {summary}\n"
             if source_url:
-                message_text += f"   {source_url}\n"
+                message_text += f"   🔗 {source_url}\n"
             message_text += "\n"
 
-        message_text += "=" * 30 + "\n"
-        message_text += "https://kaojia.github.io/amazon-market-news-aumena/"
+        message_text += "=" * 40 + "\n"
+        message_text += "👉 查看完整新聞：\n"
+        message_text += "https://kaojia.github.io/amazon-market-news-aumena/\n\n"
+        message_text += "🔍 支援分類篩選與全文搜尋"
 
         line_bot_api.push_message(group_id, TextSendMessage(text=message_text))
         print(f"Successfully pushed {len(news_items)} news items to group {group_id}")
