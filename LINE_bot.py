@@ -210,8 +210,6 @@ def push_market_news(group_id, news_items):
             message_text += f"   分類：{category}{mp_str}\n"
             if summary:
                 message_text += f"   {summary}\n"
-            if source_url:
-                message_text += f"   🔗 {source_url}\n"
             message_text += "\n"
 
         message_text += "=" * 40 + "\n"
