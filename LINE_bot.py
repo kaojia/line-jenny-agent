@@ -5,7 +5,7 @@ import requests
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, ImageMessage, TextSendMessage, FlexSendMessage
+from linebot.models import MessageEvent, TextMessage, ImageMessage, TextSendMessage
 from openai import OpenAI
 from dotenv import load_dotenv
 import gspread
@@ -181,150 +181,49 @@ def push_daily_projects(group_id, projects):
 
 def push_market_news(group_id, news_items):
     """
-    推送市場新聞到指定群組（Flex Message 卡片式）
+    推送市場新聞到指定群組（純文字格式）
     """
     try:
-        priority_colors = {
-            "high": "#DC2626",
-            "medium": "#F59E0B",
-            "low": "#0369A1",
+        priority_icons = {
+            "high": "[!]",
+            "medium": "[*]",
+            "low": "[-]",
         }
 
-        marketplace_labels = {
-            "AU": "AU",
-            "AE": "AE",
-            "SA": "SA",
-        }
+        message_text = "--- AU/MENA Market News ---\n"
+        message_text += datetime.now().strftime("%Y/%m/%d") + "\n"
+        message_text += "=" * 30 + "\n\n"
 
-        bubbles = []
-        for item in news_items[:3]:
-            title = item.get("title", "").strip() or "未命名"
-            summary = item.get("summary", "").strip() or "暫無摘要"
-            category = item.get("category", "").strip() or "新聞"
+        for i, item in enumerate(news_items[:3], 1):
+            title = item.get("title", "").strip() or "Untitled"
+            summary = item.get("summary", "").strip()
+            category = item.get("category", "").strip()
             priority = item.get("priority", "low")
             source_url = item.get("source_url", "").strip()
-            source_name = item.get("source_name", "").strip() or "來源"
             marketplace = item.get("marketplace", "").strip()
 
-            color = priority_colors.get(priority, "#0369A1")
-            mp_label = marketplace_labels.get(marketplace, marketplace)
+            icon = priority_icons.get(priority, "[-]")
+            tags = []
+            if marketplace:
+                tags.append(marketplace)
+            if category:
+                tags.append(category)
+            tag_str = " | ".join(tags)
 
-            # Category tag
-            tag_box = {
-                "type": "box",
-                "layout": "horizontal",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": category,
-                        "size": "xs",
-                        "color": "#FFFFFF",
-                        "weight": "bold",
-                        "align": "center"
-                    }
-                ],
-                "backgroundColor": color,
-                "cornerRadius": "md",
-                "paddingAll": "4px",
-                "paddingStart": "8px",
-                "paddingEnd": "8px"
-            }
-
-            body_contents = [
-                tag_box,
-                {
-                    "type": "text",
-                    "text": title,
-                    "weight": "bold",
-                    "size": "md",
-                    "wrap": True,
-                    "margin": "md"
-                },
-                {
-                    "type": "text",
-                    "text": summary,
-                    "size": "sm",
-                    "color": "#666666",
-                    "wrap": True,
-                    "margin": "md"
-                }
-            ]
-
-            if mp_label:
-                body_contents.append({
-                    "type": "text",
-                    "text": f"Marketplace: {mp_label}",
-                    "size": "xs",
-                    "color": "#999999",
-                    "margin": "md"
-                })
-
-            bubble = {
-                "type": "bubble",
-                "size": "kilo",
-                "header": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "AU/MENA Market News",
-                            "color": "#FFFFFF",
-                            "size": "sm",
-                            "weight": "bold"
-                        }
-                    ],
-                    "backgroundColor": "#1a1a2e",
-                    "paddingAll": "12px"
-                },
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": body_contents,
-                    "paddingAll": "16px"
-                }
-            }
-
+            message_text += f"{i}. {icon} {title}\n"
+            if tag_str:
+                message_text += f"   [{tag_str}]\n"
+            if summary:
+                message_text += f"   {summary}\n"
             if source_url:
-                bubble["footer"] = {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "button",
-                            "action": {
-                                "type": "uri",
-                                "label": source_name[:20],
-                                "uri": source_url
-                            },
-                            "style": "link",
-                            "height": "sm"
-                        }
-                    ],
-                    "paddingAll": "12px"
-                }
+                message_text += f"   {source_url}\n"
+            message_text += "\n"
 
-            bubbles.append(bubble)
+        message_text += "=" * 30 + "\n"
+        message_text += "https://kaojia.github.io/amazon-market-news-aumena/"
 
-        if not bubbles:
-            print("No valid news bubbles to push")
-            return False
-
-        if len(bubbles) == 1:
-            flex_content = bubbles[0]
-        else:
-            flex_content = {
-                "type": "carousel",
-                "contents": bubbles
-            }
-
-        flex_message = FlexSendMessage(
-            alt_text="AU/MENA Market News - " + news_items[0].get("title", "Today")[:30],
-            contents=flex_content
-        )
-
-        line_bot_api.push_message(group_id, flex_message)
-        print(f"Successfully pushed {len(bubbles)} news items to group {group_id}")
+        line_bot_api.push_message(group_id, TextSendMessage(text=message_text))
+        print(f"Successfully pushed {len(news_items)} news items to group {group_id}")
         return True
 
     except Exception as e:
