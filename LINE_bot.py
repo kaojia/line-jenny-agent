@@ -191,51 +191,54 @@ def push_market_news(group_id, news_items):
         }
 
         marketplace_labels = {
-            "AU": "🇦🇺 AU",
-            "AE": "🇦🇪 AE",
-            "SA": "🇸🇦 SA",
+            "AU": "AU",
+            "AE": "AE",
+            "SA": "SA",
         }
 
         bubbles = []
         for item in news_items[:3]:
-            title = item.get("title", "未命名")
-            summary = item.get("summary", "")
-            category = item.get("category", "")
+            title = item.get("title", "").strip() or "未命名"
+            summary = item.get("summary", "").strip() or "暫無摘要"
+            category = item.get("category", "").strip() or "新聞"
             priority = item.get("priority", "low")
-            source_url = item.get("source_url", "")
-            source_name = item.get("source_name", "來源")
-            marketplace = item.get("marketplace", "")
+            source_url = item.get("source_url", "").strip()
+            source_name = item.get("source_name", "").strip() or "來源"
+            marketplace = item.get("marketplace", "").strip()
 
             color = priority_colors.get(priority, "#0369A1")
             mp_label = marketplace_labels.get(marketplace, marketplace)
 
+            # Category tag
+            tag_box = {
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": category,
+                        "size": "xs",
+                        "color": "#FFFFFF",
+                        "weight": "bold",
+                        "align": "center"
+                    }
+                ],
+                "backgroundColor": color,
+                "cornerRadius": "md",
+                "paddingAll": "4px",
+                "paddingStart": "8px",
+                "paddingEnd": "8px"
+            }
+
             body_contents = [
-                {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": category,
-                            "size": "xs",
-                            "color": "#FFFFFF",
-                            "weight": "bold",
-                        }
-                    ],
-                    "backgroundColor": color,
-                    "cornerRadius": "md",
-                    "paddingAll": "4px",
-                    "paddingStart": "8px",
-                    "paddingEnd": "8px",
-                    "width": "fit-content" if len(category) <= 4 else None,
-                },
+                tag_box,
                 {
                     "type": "text",
                     "text": title,
                     "weight": "bold",
                     "size": "md",
                     "wrap": True,
-                    "margin": "md",
+                    "margin": "md"
                 },
                 {
                     "type": "text",
@@ -243,17 +246,17 @@ def push_market_news(group_id, news_items):
                     "size": "sm",
                     "color": "#666666",
                     "wrap": True,
-                    "margin": "md",
-                },
+                    "margin": "md"
+                }
             ]
 
             if mp_label:
                 body_contents.append({
                     "type": "text",
-                    "text": f"📍 {mp_label}",
+                    "text": f"Marketplace: {mp_label}",
                     "size": "xs",
                     "color": "#999999",
-                    "margin": "md",
+                    "margin": "md"
                 })
 
             bubble = {
@@ -265,21 +268,21 @@ def push_market_news(group_id, news_items):
                     "contents": [
                         {
                             "type": "text",
-                            "text": "📰 AU/MENA 市場快報",
+                            "text": "AU/MENA Market News",
                             "color": "#FFFFFF",
                             "size": "sm",
-                            "weight": "bold",
+                            "weight": "bold"
                         }
                     ],
                     "backgroundColor": "#1a1a2e",
-                    "paddingAll": "12px",
+                    "paddingAll": "12px"
                 },
                 "body": {
                     "type": "box",
                     "layout": "vertical",
                     "contents": body_contents,
-                    "paddingAll": "16px",
-                },
+                    "paddingAll": "16px"
+                }
             }
 
             if source_url:
@@ -291,37 +294,43 @@ def push_market_news(group_id, news_items):
                             "type": "button",
                             "action": {
                                 "type": "uri",
-                                "label": f"查看 {source_name}",
-                                "uri": source_url,
+                                "label": source_name[:20],
+                                "uri": source_url
                             },
                             "style": "link",
-                            "height": "sm",
+                            "height": "sm"
                         }
                     ],
-                    "paddingAll": "12px",
+                    "paddingAll": "12px"
                 }
 
             bubbles.append(bubble)
+
+        if not bubbles:
+            print("No valid news bubbles to push")
+            return False
 
         if len(bubbles) == 1:
             flex_content = bubbles[0]
         else:
             flex_content = {
                 "type": "carousel",
-                "contents": bubbles,
+                "contents": bubbles
             }
 
         flex_message = FlexSendMessage(
-            alt_text=f"📰 AU/MENA 市場快報 - {news_items[0].get('title', '今日新聞')}",
-            contents=flex_content,
+            alt_text="AU/MENA Market News - " + news_items[0].get("title", "Today")[:30],
+            contents=flex_content
         )
 
         line_bot_api.push_message(group_id, flex_message)
-        print(f"✅ 成功推送 {len(bubbles)} 則市場新聞到群組 {group_id}")
+        print(f"Successfully pushed {len(bubbles)} news items to group {group_id}")
         return True
 
     except Exception as e:
-        print(f"❌ 市場新聞推送失敗：{e}")
+        import traceback
+        print(f"Market news push failed: {e}")
+        traceback.print_exc()
         return False
 
 
