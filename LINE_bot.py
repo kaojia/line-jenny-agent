@@ -5,7 +5,7 @@ import requests
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, ImageMessage, TextSendMessage
+from linebot.models import MessageEvent, TextMessage, ImageMessage, TextSendMessage, FlexSendMessage
 from openai import OpenAI
 from dotenv import load_dotenv
 import gspread
@@ -179,6 +179,152 @@ def push_daily_projects(group_id, projects):
         return False
 
 
+def push_market_news(group_id, news_items):
+    """
+    推送市場新聞到指定群組（Flex Message 卡片式）
+    """
+    try:
+        priority_colors = {
+            "high": "#DC2626",
+            "medium": "#F59E0B",
+            "low": "#0369A1",
+        }
+
+        marketplace_labels = {
+            "AU": "🇦🇺 AU",
+            "AE": "🇦🇪 AE",
+            "SA": "🇸🇦 SA",
+        }
+
+        bubbles = []
+        for item in news_items[:3]:
+            title = item.get("title", "未命名")
+            summary = item.get("summary", "")
+            category = item.get("category", "")
+            priority = item.get("priority", "low")
+            source_url = item.get("source_url", "")
+            source_name = item.get("source_name", "來源")
+            marketplace = item.get("marketplace", "")
+
+            color = priority_colors.get(priority, "#0369A1")
+            mp_label = marketplace_labels.get(marketplace, marketplace)
+
+            body_contents = [
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": category,
+                            "size": "xs",
+                            "color": "#FFFFFF",
+                            "weight": "bold",
+                        }
+                    ],
+                    "backgroundColor": color,
+                    "cornerRadius": "md",
+                    "paddingAll": "4px",
+                    "paddingStart": "8px",
+                    "paddingEnd": "8px",
+                    "width": "fit-content" if len(category) <= 4 else None,
+                },
+                {
+                    "type": "text",
+                    "text": title,
+                    "weight": "bold",
+                    "size": "md",
+                    "wrap": True,
+                    "margin": "md",
+                },
+                {
+                    "type": "text",
+                    "text": summary,
+                    "size": "sm",
+                    "color": "#666666",
+                    "wrap": True,
+                    "margin": "md",
+                },
+            ]
+
+            if mp_label:
+                body_contents.append({
+                    "type": "text",
+                    "text": f"📍 {mp_label}",
+                    "size": "xs",
+                    "color": "#999999",
+                    "margin": "md",
+                })
+
+            bubble = {
+                "type": "bubble",
+                "size": "kilo",
+                "header": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "📰 AU/MENA 市場快報",
+                            "color": "#FFFFFF",
+                            "size": "sm",
+                            "weight": "bold",
+                        }
+                    ],
+                    "backgroundColor": "#1a1a2e",
+                    "paddingAll": "12px",
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": body_contents,
+                    "paddingAll": "16px",
+                },
+            }
+
+            if source_url:
+                bubble["footer"] = {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "uri",
+                                "label": f"查看 {source_name}",
+                                "uri": source_url,
+                            },
+                            "style": "link",
+                            "height": "sm",
+                        }
+                    ],
+                    "paddingAll": "12px",
+                }
+
+            bubbles.append(bubble)
+
+        if len(bubbles) == 1:
+            flex_content = bubbles[0]
+        else:
+            flex_content = {
+                "type": "carousel",
+                "contents": bubbles,
+            }
+
+        flex_message = FlexSendMessage(
+            alt_text=f"📰 AU/MENA 市場快報 - {news_items[0].get('title', '今日新聞')}",
+            contents=flex_content,
+        )
+
+        line_bot_api.push_message(group_id, flex_message)
+        print(f"✅ 成功推送 {len(bubbles)} 則市場新聞到群組 {group_id}")
+        return True
+
+    except Exception as e:
+        print(f"❌ 市場新聞推送失敗：{e}")
+        return False
+
+
 # --- 功能函式區 ---
 
 def send_loading_animation(chat_id, duration=20):
@@ -258,6 +404,34 @@ def push_daily():
 
     except Exception as e:
         print(f"❌ /push/daily 錯誤：{e}")
+        return {"status": "error", "message": str(e)}, 500
+
+
+@app.route("/push/news", methods=['POST'])
+def push_news():
+    """
+    接收 GitHub Actions 的市場新聞推送請求
+    Payload: { "secret": "...", "news": [{ "title", "summary", "category", "priority", "source_url", "source_name", "marketplace" }] }
+    """
+    try:
+        data = request.get_json()
+
+        if data.get("secret") != PUSH_SECRET:
+            return {"status": "error", "message": "Invalid secret"}, 401
+
+        news_items = data.get("news", [])
+        if not news_items:
+            return {"status": "error", "message": "No news provided"}, 400
+
+        success = push_market_news(TARGET_GROUP_ID, news_items)
+
+        if success:
+            return {"status": "success", "message": f"Pushed {len(news_items)} news items"}, 200
+        else:
+            return {"status": "error", "message": "Failed to push message"}, 500
+
+    except Exception as e:
+        print(f"❌ /push/news 錯誤：{e}")
         return {"status": "error", "message": str(e)}, 500
 
 
