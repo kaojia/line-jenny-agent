@@ -195,7 +195,7 @@ def push_market_news(group_id, news_items):
         message_text += f"✨ 今日精選 {len(news_items)} 則新聞\n"
         message_text += "=" * 40 + "\n\n"
 
-        for i, item in enumerate(news_items[:3], 1):
+        for i, item in enumerate(news_items[:5], 1):
             title = item.get("title", "").strip() or "未命名"
             summary = item.get("summary", "").strip()
             category = item.get("category", "").strip() or "新聞"
