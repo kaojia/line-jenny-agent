@@ -1,64 +1,74 @@
-# LINE Jenny Agent
+# LINE Bots（Jenny 助理 + 賣家客服，合併部署）
 
-一個以 Flask 打造的 LINE Bot，整合 OpenAI GPT 進行對話與名片辨識，並透過 Google Sheet 建檔、GitHub Actions 排程推送內容到 LINE 群組。
+同一個 Flask app 同時服務**兩隻獨立的 LINE Bot**，讓兩者共用一個部署（一份 Render 服務），節省費用。兩隻各自使用自己的 LINE channel（不同 token / secret），透過不同的 URL 前綴分流。
 
-## 功能特色
+| Bot | 前綴 | Webhook URL | 說明 |
+| --- | --- | --- | --- |
+| Jenny 個人助理 | `/jenny` | `.../jenny/callback` | 帶上下文 GPT 聊天、名片辨識、專案/新聞/單字推送 |
+| 賣家客服 | `/customer` | `.../customer/callback` | 亞馬遜賣家問答，System Prompt 由 Google Sheet 動態載入 |
 
-**AI 聊天助手**
-一般文字訊息會交給 GPT-6 Luna 處理，並依聊天室（個人或群組）各自保留最近 10 筆對話紀錄，超過 30 分鐘沒有互動則自動清空，讓回覆能延續上下文。
+## 檔案結構
 
-**名片辨識與自動建檔**
-在指定的「名片群組」（`CARD_GROUP_ID`）上傳圖片時，Bot 會下載圖片並交給 GPT-6 Luna 影像辨識，擷取姓名、公司、職稱、電話、手機、Email、地址、網站、備註等欄位，再自動寫入指定的 Google Sheet（「名片」工作表，不存在時會自動建立），並附上重試機制避免因網路問題寫入失敗。
+| 檔案 | 說明 |
+| --- | --- |
+| `app.py` | 入口：建立 Flask app、掛載兩個 blueprint、提供 `/ping` |
+| `bot_jenny.py` | Jenny 個人助理（blueprint `jenny`，掛載於 `/jenny`） |
+| `bot_customer.py` | 賣家客服 bot（blueprint `customer`，掛載於 `/customer`） |
+| `notion_vocab.py` | 日文 N1 單字整理（供推送用） |
+| `Procfile` | `web: gunicorn app:app` |
 
-**每日 Claude Code 專案靈感推送**
-提供 `POST /push/daily` 端點，供 GitHub Actions 排程呼叫，帶入專案清單後會整理成含難度標示（🟢初階／🟡中階／🔴高階）、分類與說明的單則訊息，推送到目標群組，並附上完整列表網站連結。
+## 功能
 
-**日文 N1 單字推送**
-提供 `POST /push/vocab` 端點，同樣由 GitHub Actions 排程呼叫，將整理好的單字內容推送到目標群組。
+### Jenny 個人助理（`/jenny`）
+- **AI 聊天助手**：一般文字交給 `gpt-6-luna`，依聊天室各自保留最近 10 筆對話，超過 30 分鐘無互動自動清空
+- **名片辨識自動建檔**：在 `CARD_GROUP_ID` 群組上傳圖片，`gpt-6-luna` 影像辨識後寫入 Google Sheet「名片」工作表（附重試機制）
+- **每日專案／市場新聞／N1 單字推送**：`POST /jenny/push/daily`、`/jenny/push/news`、`/jenny/push/vocab`（帶 `secret`），供 GitHub Actions 排程呼叫
+- **群組導覽 & 除錯**：目標群組發訊回固定導覽；輸入 `show-group-id` 取得 `chat_id`；`GET /jenny/debug/group-id`
 
-**群組導覽訊息**
-若在目標推送群組（`TARGET_GROUP_ID`）中發送一般訊息，Bot 不會呼叫 GPT，而是固定回覆該群組用途說明與網站連結，避免非必要的 API 呼叫。
-
-**除錯輔助**
-在任何聊天室輸入 `show-group-id` 可取得該聊天室的 `chat_id`，方便設定環境變數；另提供 `GET /debug/group-id` 查看目前設定的 `TARGET_GROUP_ID`。
-
-**Loading 動畫**
-回覆前會呼叫 LINE 的 Loading API，讓使用者在等待 GPT 回應時看到讀取動畫，提升體驗。
-
-## 技術架構
-
-- **Web 框架**：Flask + gunicorn（`Procfile`：`web: gunicorn LINE_bot:app`）
-- **LINE 整合**：`line-bot-sdk`（Webhook 簽章驗證、訊息推播）
-- **AI 模型**：OpenAI `gpt-6-luna`（文字對話與名片圖片辨識）
-- **資料儲存**：Google Sheets（透過 `gspread` + service account 憑證寫入）
-- **排程觸發**：`.github/workflows` 中的 GitHub Actions，定期呼叫 `/push/daily`、`/push/vocab` 端點
-- **設定管理**：`python-dotenv` 讀取環境變數
+### 賣家客服（`/customer`）
+- **AI 客服問答**：`gpt-6-luna`，自動偵測中/英文並附免責聲明
+- **Google Sheet 動態 Prompt / 指令模式**：試算表 `AI_Assistant_Config`，指令切換人設——`#polish` 潤稿、`#trans` 翻譯、`#biz` 商業檢視、`#line` LINE 文案、`#ai`
+- **官方已處理關鍵字跳過**：wifi／預約諮詢／促銷提報／品牌註冊等不呼叫 GPT
+- **FAQ 罐頭回覆 + 快取**；**私聊直接回、群組需 `@bot` 才回**
 
 ## API 路由
 
 | 方法 | 路徑 | 說明 |
 | --- | --- | --- |
-| POST | `/callback` | LINE Webhook 主入口，接收並處理訊息事件 |
-| POST | `/push/daily` | 接收 GitHub Actions 推送的每日專案清單（需帶 `secret`） |
-| POST | `/push/vocab` | 接收 GitHub Actions 推送的單字內容（需帶 `secret`） |
-| GET | `/debug/group-id` | 查看目前設定的 `TARGET_GROUP_ID` |
+| POST | `/jenny/callback` | Jenny bot LINE Webhook |
+| POST | `/jenny/push/daily` | 每日專案推送（需 `secret`） |
+| POST | `/jenny/push/news` | 市場新聞推送（需 `secret`） |
+| POST | `/jenny/push/vocab` | N1 單字推送（需 `secret`） |
+| GET | `/jenny/debug/group-id` | 顯示目前 `TARGET_GROUP_ID` |
+| POST | `/customer/callback` | 賣家客服 bot LINE Webhook |
+| GET | `/ping` | Keep-alive 健康檢查 |
 
 ## 環境變數
 
 | 變數 | 用途 |
 | --- | --- |
-| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging API 存取權杖 |
-| `LINE_CHANNEL_SECRET` | LINE Webhook 簽章驗證密鑰 |
-| `OPENAI_API_KEY` | OpenAI API 金鑰 |
-| `TARGET_GROUP_ID` | 接收每日專案／單字推送的群組 ID |
-| `CARD_GROUP_ID` | 啟用名片辨識功能的群組 ID |
-| `Creds2` | Google service account 憑證 JSON（字串） |
-| `PUSH_SECRET` | `/push/daily`、`/push/vocab` 端點的驗證密鑰 |
+| `OPENAI_API_KEY` | OpenAI 金鑰（兩隻共用） |
+| `OPENAI_MODEL` | （選填）覆寫模型，預設 `gpt-6-luna` |
+| `JENNY_LINE_CHANNEL_ACCESS_TOKEN` | Jenny channel 存取權杖（相容舊名 `LINE_CHANNEL_ACCESS_TOKEN`） |
+| `JENNY_LINE_CHANNEL_SECRET` | Jenny channel 簽章密鑰（相容舊名 `LINE_CHANNEL_SECRET`） |
+| `TARGET_GROUP_ID` | Jenny 推送目標群組 |
+| `CARD_GROUP_ID` | 名片辨識群組 |
+| `Creds2` | Jenny 用 Google service account 憑證 JSON |
+| `PUSH_SECRET` | Jenny 推送端點驗證密鑰 |
+| `CUST_LINE_CHANNEL_ACCESS_TOKEN` | 客服 channel 存取權杖 |
+| `CUST_LINE_CHANNEL_SECRET` | 客服 channel 簽章密鑰 |
+| `GOOGLE_SHEETS_KEY` | 客服用 Google service account 憑證 JSON |
 
 ## 部署
 
-專案以 `Procfile` 搭配 `gunicorn` 啟動，可部署於 Heroku、Render 等支援 Procfile 的平台；`requirements.txt` 列出所有 Python 相依套件。
+以 `Procfile` 搭配 `gunicorn` 啟動（`web: gunicorn app:app`），可部署於 Render、Heroku 等平台。部署後：
+
+1. 於平台設定上述環境變數
+2. LINE Developers Console 將兩個 channel 的 Webhook URL 分別設為 `.../jenny/callback` 與 `.../customer/callback`
+3. GitHub Actions 的推送 URL 指向 `.../jenny/push/daily`、`/jenny/push/news`、`/jenny/push/vocab`
+
+> **備註**：本 repo 已整併原 `kaojia/line-bot-customer` 的賣家客服程式，合併後由此單一服務部署；`line-bot-customer` repo 可保留為歷史或封存。
 
 ---
 
-*此 README 由觀察 repository 原始碼（`LINE_bot.py`、`requirements.txt`、`Procfile`）整理產生，`.github/workflows` 的排程細節（觸發時間等）建議直接查看該資料夾內的 workflow 檔案確認。*
+*本 README 由觀察 repository 原始碼整理產生。*
