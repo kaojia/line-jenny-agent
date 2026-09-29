@@ -251,7 +251,7 @@ def get_gpt_reply(user_message, chat_id):
         messages.append({"role": "user", "content": user_message})
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-6-luna",
             messages=messages,
             max_completion_tokens=500
         )
@@ -396,9 +396,9 @@ def handle_image(event):
                 image_bytes += chunk
             image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-            # 2. 用 GPT-4o 辨識名片
+            # 2. 用 GPT-6 Luna 辨識名片
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-6-luna",
                 messages=[
                     {
                         "role": "system",

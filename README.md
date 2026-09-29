@@ -5,10 +5,10 @@
 ## 功能特色
 
 **AI 聊天助手**
-一般文字訊息會交給 GPT-4o-mini 處理，並依聊天室（個人或群組）各自保留最近 10 筆對話紀錄，超過 30 分鐘沒有互動則自動清空，讓回覆能延續上下文。
+一般文字訊息會交給 GPT-6 Luna 處理，並依聊天室（個人或群組）各自保留最近 10 筆對話紀錄，超過 30 分鐘沒有互動則自動清空，讓回覆能延續上下文。
 
 **名片辨識與自動建檔**
-在指定的「名片群組」（`CARD_GROUP_ID`）上傳圖片時，Bot 會下載圖片並交給 GPT-4o 影像辨識，擷取姓名、公司、職稱、電話、手機、Email、地址、網站、備註等欄位，再自動寫入指定的 Google Sheet（「名片」工作表，不存在時會自動建立），並附上重試機制避免因網路問題寫入失敗。
+在指定的「名片群組」（`CARD_GROUP_ID`）上傳圖片時，Bot 會下載圖片並交給 GPT-6 Luna 影像辨識，擷取姓名、公司、職稱、電話、手機、Email、地址、網站、備註等欄位，再自動寫入指定的 Google Sheet（「名片」工作表，不存在時會自動建立），並附上重試機制避免因網路問題寫入失敗。
 
 **每日 Claude Code 專案靈感推送**
 提供 `POST /push/daily` 端點，供 GitHub Actions 排程呼叫，帶入專案清單後會整理成含難度標示（🟢初階／🟡中階／🔴高階）、分類與說明的單則訊息，推送到目標群組，並附上完整列表網站連結。
@@ -29,7 +29,7 @@
 
 - **Web 框架**：Flask + gunicorn（`Procfile`：`web: gunicorn LINE_bot:app`）
 - **LINE 整合**：`line-bot-sdk`（Webhook 簽章驗證、訊息推播）
-- **AI 模型**：OpenAI `gpt-4o-mini`（文字對話）、`gpt-4o`（名片圖片辨識）
+- **AI 模型**：OpenAI `gpt-6-luna`（文字對話與名片圖片辨識）
 - **資料儲存**：Google Sheets（透過 `gspread` + service account 憑證寫入）
 - **排程觸發**：`.github/workflows` 中的 GitHub Actions，定期呼叫 `/push/daily`、`/push/vocab` 端點
 - **設定管理**：`python-dotenv` 讀取環境變數
