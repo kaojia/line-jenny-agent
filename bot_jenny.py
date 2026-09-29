@@ -217,9 +217,12 @@ def get_gpt_reply(user_message, chat_id):
         response = client.chat.completions.create(
             model=MODEL,
             messages=messages,
-            max_completion_tokens=500,
+            max_completion_tokens=2000,  # 推理型模型會先耗 token 推理，需留足輸出空間
         )
-        reply = response.choices[0].message.content.strip()
+        reply = (response.choices[0].message.content or "").strip()
+        if not reply:
+            print("⚠️ 模型回傳空內容，使用 fallback")
+            return "抱歉，我這次沒能生出回覆，請換個說法再問一次 🙏"
 
         add_to_history(chat_id, "user", user_message)
         add_to_history(chat_id, "assistant", reply)
@@ -345,9 +348,11 @@ def handle_image(event):
                         ],
                     },
                 ],
-                max_completion_tokens=800,
+                max_completion_tokens=2000,  # 推理型模型會先耗 token 推理，需留足輸出空間
             )
-            result = response.choices[0].message.content.strip()
+            result = (response.choices[0].message.content or "").strip()
+            if not result:
+                result = "⚠️ 辨識結果為空，請重拍清楚一點再試。"
 
             if "這不是名片" not in result:
                 try:

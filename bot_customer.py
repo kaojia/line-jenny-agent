@@ -142,9 +142,13 @@ def get_gpt_reply(user_message):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": clean_text},
                 ],
-                max_tokens=500,
+                max_completion_tokens=2000,  # 推理型模型會先耗 token 推理，需留足輸出空間
             )
-            reply_text = response.choices[0].message.content.strip()
+            reply_text = (response.choices[0].message.content or "").strip()
+            if not reply_text:
+                print("⚠️ 模型回傳空內容，重試")
+                time.sleep(1)
+                continue
 
             if english_input:
                 reply_text += "\n\n(AI response for reference only)"
