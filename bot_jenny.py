@@ -3,6 +3,7 @@
 以 Flask Blueprint 形式提供，掛載於 /jenny 前綴（見 app.py）。
 """
 import os
+import re
 import base64
 import time
 import json
@@ -206,11 +207,37 @@ def send_loading_animation(chat_id, duration=20):
         print(f"❌ Loading API 錯誤：{e}")
 
 
+SYSTEM_PROMPT = (
+    "你是一個友善的 AI 助手。"
+    "回覆時務必使用純文字，不要使用任何 Markdown 語法——"
+    "不要用 **粗體**、*斜體*、`程式碼`、# 標題、> 引用或 [] () 連結語法，"
+    "因為 LINE 無法顯示這些符號，會直接出現原始星號。"
+    "需要條列時用「1. 」數字或「・」符號，不要用 - 或 *。"
+)
+
+# 移除模型可能殘留的 Markdown 標記（LINE 不支援）
+_MD_BOLD_ITALIC = re.compile(r'(\*{1,3}|_{1,3})(.+?)\1', re.DOTALL)
+_MD_HEADING = re.compile(r'^\s{0,3}#{1,6}\s+', re.MULTILINE)
+_MD_BULLET = re.compile(r'^(\s*)[-*+]\s+', re.MULTILINE)
+_MD_INLINE_CODE = re.compile(r'`([^`]*)`')
+_MD_CODE_FENCE = re.compile(r'```[a-zA-Z0-9]*\n?')
+
+
+def strip_markdown(text):
+    """把常見 Markdown 標記轉成 LINE 可讀的純文字。"""
+    text = _MD_CODE_FENCE.sub('', text)
+    text = _MD_INLINE_CODE.sub(r'\1', text)
+    text = _MD_BOLD_ITALIC.sub(r'\2', text)
+    text = _MD_HEADING.sub('', text)
+    text = _MD_BULLET.sub(r'\1・', text)
+    return text.strip()
+
+
 def get_gpt_reply(user_message, chat_id):
     """ChatGPT 帶上下文回覆"""
     try:
         history = get_chat_history(chat_id)
-        messages = [{"role": "system", "content": "你是一個友善的 AI 助手。"}]
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         messages.extend(history)
         messages.append({"role": "user", "content": user_message})
 
@@ -219,7 +246,7 @@ def get_gpt_reply(user_message, chat_id):
             messages=messages,
             max_completion_tokens=2000,  # 推理型模型會先耗 token 推理，需留足輸出空間
         )
-        reply = (response.choices[0].message.content or "").strip()
+        reply = strip_markdown((response.choices[0].message.content or "").strip())
         if not reply:
             print("⚠️ 模型回傳空內容，使用 fallback")
             return "抱歉，我這次沒能生出回覆，請換個說法再問一次 🙏"
