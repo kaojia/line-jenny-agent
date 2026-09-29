@@ -140,6 +140,18 @@ def format_vocab_message(vocab_list, session="上午"):
     return msg
 
 
+def build_vocab_url():
+    """組出正確的 /jenny/push/vocab 端點。
+
+    合併部署後端點改為 /jenny/push/vocab。此函式容錯處理 RENDER_DEPLOY_URL
+    是否已含 /jenny 或結尾斜線，避免出現 /push/vocab（404）或 /jenny/jenny/... 。
+    """
+    base = (RENDER_DEPLOY_URL or "").rstrip("/")
+    if base.endswith("/jenny"):
+        base = base[: -len("/jenny")]
+    return f"{base}/jenny/push/vocab"
+
+
 def push_to_line(message):
     """推送訊息到 LINE Bot"""
     payload = {
@@ -147,11 +159,9 @@ def push_to_line(message):
         "message": message
     }
 
-    response = requests.post(
-        f"{RENDER_DEPLOY_URL}/push/vocab",
-        json=payload,
-        timeout=30
-    )
+    url = build_vocab_url()
+    print(f"📮 推送端點：{url}")
+    response = requests.post(url, json=payload, timeout=30)
 
     print(f"推送狀態碼：{response.status_code}")
     print(f"回應：{response.text}")
